@@ -1,0 +1,33 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# --- Virtual environment (never commit this; it's machine-specific) ---
+.venv/
+venv/
+
+# --- Large data & model outputs (too big / not meant for git) ---
+data/
+outputs/
+scenes/
+*.mp4
+*.ply
+*.glb
+
+# --- Node (the web viewer, much later) ---
+node_modules/
+
+# --- Jupyter / Colab ---
+.ipynb_checkpoints/
+
+# --- OS / editor cruft ---
+.DS_Store
+.idea/
+
+# --- Internal docs: keep ONLY the README in the public repo ---
+*.md
+!README.md
