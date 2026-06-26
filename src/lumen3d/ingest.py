@@ -89,11 +89,13 @@ def extract_video_frames(video_path: str, output_dir: str, stride: int = 10) -> 
 
 
 
-def load_frames(input_path: str) -> list[Path]:
+def load_frames(input_path: str, output_dir: str ='frames', stride: int = 10) -> list[Path]:
     """Takes in input path and routes to either find_images() or extract_video_frames()
 
     Args:
         input_path: Path to a directory that contains image files or video.
+        output_dir: Path to the folder you want to create that will contain frames of the video
+        stride: stride determines how many frames we skip from the video and how many you keep. if stride in 10 every 10th frame will be saved to be used and the rest will be discarded
 
     Returns:
         A list of Path objects (one per image or frame), sorted by name so the frames
@@ -108,7 +110,7 @@ def load_frames(input_path: str) -> list[Path]:
 
     elif path_object.is_file():
         if path_object.suffix.lower() in VIDEO_EXTENSIONS:
-            raise NotImplementedError("function to take video not implemented yet")
+            return extract_video_frames(input_path,output_dir,stride)
 
         else:
             raise ValueError("Only video files or image folders are accepted")
