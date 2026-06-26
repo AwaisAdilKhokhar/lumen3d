@@ -31,3 +31,7 @@ node_modules/
 # --- Internal docs: keep ONLY the README in the public repo ---
 *.md
 !README.md
+
+video.mp4
+frames_out/
+image.png
