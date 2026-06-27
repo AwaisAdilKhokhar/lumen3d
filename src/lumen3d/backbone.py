@@ -30,9 +30,36 @@ class Backbone(ABC):
 
 class DA3Backbone(Backbone):
 
+    def __init__(self, weights="depth-anything/DA3-LARGE", device=None):
+        self.weights = weights   
+        self.device = device     
+        self._model = None
+
+    def _load_model(self):
+        if self._model is None:            # not loaded yet?
+            from depth_anything_3.api import DepthAnything3   # ← lazy import, here not at top
+            import torch
+            device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
+            self.device = device
+            self._model = DepthAnything3.from_pretrained(self.weights).to(device)
+        return self._model
+
     def reconstruct(self, frames: list[Path]) -> Reconstruction:
-         raise NotImplementedError('I havent implemented the reconstruct method in DA3BackBone yet')
+        model = self._load_model()
 
+        paths = [str(p) for p in frames] 
 
+        pred = model.inference(image=paths, export_dir=None)
 
+        from depth_anything_3.utils.export.glb import (
+        _depths_to_world_points_with_colors, get_conf_thresh,
+    )
+
+        conf_thr = get_conf_thresh(pred, getattr(pred, "sky_mask", None), 1.05, 40.0)   # (e)
+        points, colors = _depths_to_world_points_with_colors(   # (f) unproject -> arrays
+            pred.depth, pred.intrinsics, pred.extrinsics,
+            pred.processed_images, pred.conf, conf_thr,
+        )
+
+        return Reconstruction(points=points,colors=colors)
 

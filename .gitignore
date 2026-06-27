@@ -8,6 +8,7 @@ dist/
 
 # --- Virtual environment (never commit this; it's machine-specific) ---
 .venv/
+.venv-da3/    # separate Python 3.12 venv just for Depth Anything 3
 venv/
 
 # --- Large data & model outputs (too big / not meant for git) ---
@@ -35,3 +36,6 @@ node_modules/
 video.mp4
 frames_out/
 image.png
+
+
+.venv-da3/
