@@ -97,6 +97,28 @@ def test_unproject_frame_drops_low_confidence():
     # The low-confidence pixel (u=1, v=0) is dropped -> 3 points survive.
     assert len(pts) == 3
 
+def test_unproject_frame_mask():
+    # Same frame, all depths valid, we test if the mask works
+    depth = np.array([[2, 2],
+                      [2, 2]], dtype=float)
+    mask = np.array([[False, False],
+                      [True, False]], dtype=bool)
+    K = np.array([[1, 0, 0],
+                  [0, 1, 0],
+                  [0, 0, 1]], dtype=float)
+    c2w = np.eye(4)
+    image = np.array([[[10, 10, 10], [20, 20, 20]],
+                      [[30, 30, 30], [40, 40, 40]]], dtype=np.uint8)
+    conf = np.array([[1.0, 1.0],    
+                     [1.0, 1.0]])
+
+    pts, cols = unproject_frame(depth, K, c2w, image, conf, conf_thr=0.5,mask=mask)
+
+   
+    assert len(pts) == 1
+    assert np.allclose(pts, [[0, 2, 2]])
+    assert np.array_equal(cols, [[30, 30, 30]])
+
 
 # --- unproject (all frames) ------------------------------------------------
 

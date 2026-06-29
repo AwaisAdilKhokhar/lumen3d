@@ -24,7 +24,7 @@ def camera_point_to_world(cam_point, c2w):
     xyz=result[:3]
     return xyz
 
-def unproject_frame(depth, K, c2w, image, conf, conf_thr):
+def unproject_frame(depth, K, c2w, image, conf, conf_thr,mask=None):
     # depth: (H, W), K: (3,3), c2w: (4,4), image: (H, W, 3) uint8, conf: (H, W)
     # 1) pull fx, fy, cx, cy out of K
     # 2) read H, W from depth.shape
@@ -50,6 +50,9 @@ def unproject_frame(depth, K, c2w, image, conf, conf_thr):
                 continue
             if conf[v, u] < conf_thr:            # low confidence? skip
                 continue
+            if mask is not None and not mask[v, u]:
+                continue
+
             # --- only valid pixels reach here ---
             cam   = pixel_to_camera_point(u, v, d, fx, fy, cx, cy)
             world = camera_point_to_world(cam, c2w)
