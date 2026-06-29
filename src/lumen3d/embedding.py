@@ -19,11 +19,14 @@ class SigLIPEmbedder(Embedder):
 
     def _load_model(self):
         if self._model is None or self._processor is None:       # not loaded yet?
-            from transformers import AutoProcessor, AutoModel
+            from transformers import AutoImageProcessor, AutoModel
             import torch
             device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
             self.device = device
-            self._processor = AutoProcessor.from_pretrained(self.weights)   # the adapter
+            # region embeddings only use the IMAGE side, so load just the image
+            # processor (AutoProcessor would also pull SigLIP's text tokenizer +
+            # its sentencepiece/protobuf deps). Image preprocessing is identical.
+            self._processor = AutoImageProcessor.from_pretrained(self.weights)
             self._model     = AutoModel.from_pretrained(self.weights).to(self.device)
         return self._processor,self._model
 
@@ -33,7 +36,9 @@ class SigLIPEmbedder(Embedder):
         inputs = processor(images=image, return_tensors="pt").to(self.device)
         with torch.no_grad():
             features = model.get_image_features(**inputs)
-        return features[0].cpu().numpy()
+        # get_image_features returns a BaseModelOutputWithPooling, not a tensor:
+        # .pooler_output is the (1, D) pooled image embedding; [0] drops the batch.
+        return features.pooler_output[0].cpu().numpy()
 
     def embed_regions(self, images: np.ndarray, masks: list[list[ObjectMask]]) -> dict[int, np.ndarray]:
         
