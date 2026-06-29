@@ -1,4 +1,5 @@
 import numpy as np
+import cv2
 
 
 
@@ -23,6 +24,16 @@ def camera_point_to_world(cam_point, c2w):
     result=c2w @ point
     xyz=result[:3]
     return xyz
+
+def resize_mask(mask, shape):
+    # mask: (Hm, Wm) bool array (from SAM2)
+    # shape: the target (H, W) — i.e. depth.shape
+    # -> returns an (H, W) bool array, nearest-neighbor resized
+    H,W=shape
+    uint8_mask = mask.astype(np.uint8)
+    resized_mask = cv2.resize(uint8_mask, (W, H), interpolation=cv2.INTER_NEAREST)
+    mask = resized_mask.astype(bool)
+    return mask
 
 def unproject_frame(depth, K, c2w, image, conf, conf_thr,mask=None):
     # depth: (H, W), K: (3,3), c2w: (4,4), image: (H, W, 3) uint8, conf: (H, W)

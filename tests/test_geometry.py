@@ -7,6 +7,7 @@ from lumen3d.geometry import (
     camera_point_to_world,
     unproject_frame,
     unproject,
+    resize_mask,
 )
 
 
@@ -118,6 +119,26 @@ def test_unproject_frame_mask():
     assert len(pts) == 1
     assert np.allclose(pts, [[0, 2, 2]])
     assert np.array_equal(cols, [[30, 30, 30]])
+
+
+def test_unproject_frame_mask_resize():
+    
+    
+    mask = np.array([[False, False],
+                      [True, False]], dtype=bool)
+    
+
+    result = resize_mask(mask, (4, 4))
+
+    
+
+   
+    assert result.shape == (4, 4)
+    assert result.dtype == bool
+    assert result[3, 0]==True
+    assert result[0, 0]==False
+    assert result[0, 3]==False
+    assert result[3, 3]==False
 
 
 # --- unproject (all frames) ------------------------------------------------
