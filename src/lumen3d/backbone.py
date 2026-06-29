@@ -9,13 +9,34 @@ import numpy as np
 class Reconstruction:
     """A reconstructed point cloud: 3D geometry of a scene.
 
+    `points` and `colors` are always present (the merged cloud). The remaining
+    fields are the per-frame arrays needed to unproject a single mask back to 3D
+    (mask -> 3D). They are optional: present when the backbone exposes them
+    (DA3 does), otherwise `None`.
+
     Attributes:
         points: Float array of shape (N, 3) — the XYZ position of each point.
         colors: Uint8 array of shape (N, 3) — the RGB color of each point,
             row-aligned with `points` (colors[i] is the color of points[i]).
+        depth: Float array of shape (F, H, W) — per-frame depth map;
+            depth[i][v, u] is how far pixel (u, v) of frame i is.
+        intrinsics: Float array of shape (F, 3, 3) — per-frame camera matrix K
+            (focal lengths fx, fy and principal point cx, cy).
+        extrinsics: Per-frame camera pose, world->camera (w2c). ⚠️ Must be
+            inverted to camera->world (and homogenized to 4x4) before
+            unprojecting — see geometry.to_homogeneous / unproject.
+        images: Uint8 array of shape (F, H, W, 3) — the processed RGB frames
+            (DA3's processed_images).
+        conf: Float array of shape (F, H, W) — per-pixel confidence; low values
+            are filtered out before a point is created.
     """
     points: np.ndarray
     colors: np.ndarray
+    depth: np.ndarray | None = None
+    intrinsics: np.ndarray | None = None
+    extrinsics: np.ndarray | None = None
+    images: np.ndarray | None = None
+    conf: np.ndarray | None = None
 
 
 class Backbone(ABC):
@@ -61,5 +82,12 @@ class DA3Backbone(Backbone):
             pred.processed_images, pred.conf, conf_thr,
         )
 
-        return Reconstruction(points=points,colors=colors)
-
+        return Reconstruction(
+            points=points,
+            colors=colors,
+            depth=pred.depth,
+            intrinsics=pred.intrinsics,
+            extrinsics=pred.extrinsics,
+            images=pred.processed_images,
+            conf=pred.conf,
+        )
