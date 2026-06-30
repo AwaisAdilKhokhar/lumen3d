@@ -16,6 +16,7 @@ class SigLIPEmbedder(Embedder):
         self.device = device     
         self._model = None
         self._processor = None
+        self._tokenizer = None
 
     def _load_model(self):
         if self._model is None or self._processor is None:       # not loaded yet?
@@ -62,3 +63,16 @@ class SigLIPEmbedder(Embedder):
         for mask_id, vlist in buckets.items():
             result[mask_id] = np.mean(vlist, axis=0).astype(np.float32)
         return result
+    
+    def embed_text(self, query: str) -> np.ndarray: 
+        import torch
+        _ , model=self._load_model()
+        if self._tokenizer is None:
+             from transformers import AutoTokenizer
+             self._tokenizer = AutoTokenizer.from_pretrained(self.weights)
+        inputs = self._tokenizer([query], padding="max_length", return_tensors="pt").to(self.device)
+
+        with torch.no_grad():
+            features = model.get_text_features(**inputs)
+
+        return features.pooler_output[0].cpu().numpy()
