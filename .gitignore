@@ -8,7 +8,8 @@ dist/
 
 # --- Virtual environment (never commit this; it's machine-specific) ---
 .venv/
-.venv-da3/    # separate Python 3.12 venv just for Depth Anything 3
+# .venv-da3 = separate Python 3.12 venv just for Depth Anything 3
+.venv-da3/
 venv/
 
 # --- Large data & model outputs (too big / not meant for git) ---
@@ -33,9 +34,9 @@ node_modules/
 *.md
 !README.md
 
+# --- Local test assets (machine-specific; gitignored) ---
 video.mp4
 frames_out/
 image.png
-
-
-.venv-da3/
+test_frames/
+test_video.mp4
