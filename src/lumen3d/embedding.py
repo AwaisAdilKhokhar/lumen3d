@@ -23,10 +23,7 @@ class SigLIPEmbedder(Embedder):
             import torch
             device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
             self.device = device
-            # region embeddings only use the IMAGE side, so load just the image
-            # processor (AutoProcessor would also pull SigLIP's text tokenizer +
-            # its sentencepiece/protobuf deps). Image preprocessing is identical.
-            self._processor = AutoImageProcessor.from_pretrained(self.weights)
+            self._processor = AutoImageProcessor.from_pretrained(self.weights)   # the adapter
             self._model     = AutoModel.from_pretrained(self.weights).to(self.device)
         return self._processor,self._model
 
