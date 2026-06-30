@@ -92,7 +92,7 @@
 
         // PLY carries per-point colors -> tell the material to use them.
         backdropMaterial = new THREE.PointsMaterial({
-          size: radius * 0.004,
+          size: radius * 0.008,    // bigger dots so surfaces read as solid
           vertexColors: true,
           sizeAttenuation: true,
           transparent: true,        // so we can dim it when something is highlighted
@@ -165,7 +165,7 @@
       geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
       const mat = new THREE.PointsMaterial({
         color: 0xffe14d,                 // bright yellow
-        size: sceneRadius * 0.012,       // ~3x the backdrop dots
+        size: sceneRadius * 0.016,       // ~2x the backdrop dots, so it pops
         sizeAttenuation: true,
       });
       highlight = new THREE.Points(geom, mat);
