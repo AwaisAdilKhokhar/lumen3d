@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Muhammad Awais Bin Adil" }]
 license = { text = "Apache-2.0" }
-dependencies = ["opencv-python", "transformers"]
+dependencies = ["opencv-python", "transformers", "fastapi"]
 
 [build-system]
 requires = ["hatchling"]
