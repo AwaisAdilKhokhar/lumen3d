@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Lumen3D viewer</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #111; }
+    canvas { display: block; }
+    #hud {
+      position: fixed; top: 10px; left: 12px;
+      font: 13px/1.4 system-ui, sans-serif; color: #bbb;
+      user-select: none; pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="hud">Lumen3D — drag to orbit · scroll to zoom · right-drag to pan</div>
+
+  <!-- import map: resolves `three` to a CDN URL, so no npm / build step is needed -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { PLYLoader } from "three/addons/loaders/PLYLoader.js";
+
+    // ── the big three ────────────────────────────────────────────────
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x111111);
+
+    const camera = new THREE.PerspectiveCamera(
+      60, window.innerWidth / window.innerHeight, 0.01, 5000
+    );
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.body.appendChild(renderer.domElement);
+
+    // mouse-drag orbit / scroll-zoom / right-drag pan
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;   // gentle inertia
+
+    // ── load our point cloud ─────────────────────────────────────────
+    const loader = new PLYLoader();
+    loader.load(
+      "scene.ply",
+      (geometry) => {
+        // DA3 (computer-vision convention) has Y pointing DOWN; three.js has Y
+        // pointing UP. Negate Y so the room isn't rendered upside-down.
+        geometry.scale(1, -1, 1);
+
+        geometry.computeBoundingSphere();
+        const { center, radius } = geometry.boundingSphere;
+
+        // PLY carries per-point colors -> tell the material to use them.
+        const material = new THREE.PointsMaterial({
+          size: radius * 0.004,    // dot size scaled to the cloud
+          vertexColors: true,
+          sizeAttenuation: true,   // farther points draw smaller
+        });
+
+        const cloud = new THREE.Points(geometry, material);
+        scene.add(cloud);
+
+        // frame the camera on the cloud, and orbit around its center
+        controls.target.copy(center);
+        camera.position.set(center.x, center.y, center.z + radius * 3);
+        camera.near = radius * 0.01;
+        camera.far = radius * 100;
+        camera.updateProjectionMatrix();
+        controls.update();
+      },
+      undefined,
+      (err) => console.error("Failed to load scene.ply:", err)
+    );
+
+    // ── keep the canvas matched to the window ────────────────────────
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ── render loop: redraw every frame so orbiting animates ─────────
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>
