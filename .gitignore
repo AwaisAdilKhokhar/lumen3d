@@ -19,6 +19,10 @@ scenes/
 *.mp4
 *.ply
 *.glb
+*.pkl
+scene.pkl
+_build_full/
+_build_small/
 
 # --- Node (the web viewer, much later) ---
 node_modules/

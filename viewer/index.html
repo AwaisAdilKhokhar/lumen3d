@@ -7,13 +7,37 @@
     html, body { margin: 0; height: 100%; background: #111; }
     canvas { display: block; }
     #hud {
-      position: fixed; top: 10px; left: 12px;
-      font: 13px/1.4 system-ui, sans-serif; color: #bbb;
+      position: fixed; bottom: 10px; left: 12px;
+      font: 13px/1.4 system-ui, sans-serif; color: #888;
       user-select: none; pointer-events: none;
+    }
+    #bar {
+      position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 8px; align-items: center;
+      font: 14px system-ui, sans-serif;
+    }
+    #q {
+      width: 320px; padding: 9px 12px; border-radius: 8px;
+      border: 1px solid #444; background: #1c1c1c; color: #eee; outline: none;
+    }
+    #q:focus { border-color: #ffe14d; }
+    #go {
+      padding: 9px 16px; border-radius: 8px; border: none; cursor: pointer;
+      background: #ffe14d; color: #111; font-weight: 600;
+    }
+    #status {
+      position: fixed; top: 56px; left: 50%; transform: translateX(-50%);
+      font: 13px system-ui, sans-serif; color: #ffe14d; min-height: 16px;
     }
   </style>
 </head>
 <body>
+  <div id="bar">
+    <input id="q" type="text" autocomplete="off"
+           placeholder="Search the scene…  e.g. a wooden chair" />
+    <button id="go">Find</button>
+  </div>
+  <div id="status"></div>
   <div id="hud">Lumen3D — drag to orbit · scroll to zoom · right-drag to pan</div>
 
   <!-- import map: resolves `three` to a CDN URL, so no npm / build step is needed -->
@@ -48,6 +72,11 @@
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;   // gentle inertia
 
+    // module-level handles the query logic needs later
+    let backdropMaterial = null;   // the full-room cloud's material (to dim it)
+    let highlight = null;          // the currently lit-up object (one at a time)
+    let sceneRadius = 1;           // used to scale highlight dot size
+
     // ── load our point cloud ─────────────────────────────────────────
     const loader = new PLYLoader();
     loader.load(
@@ -59,15 +88,18 @@
 
         geometry.computeBoundingSphere();
         const { center, radius } = geometry.boundingSphere;
+        sceneRadius = radius;
 
         // PLY carries per-point colors -> tell the material to use them.
-        const material = new THREE.PointsMaterial({
-          size: radius * 0.004,    // dot size scaled to the cloud
+        backdropMaterial = new THREE.PointsMaterial({
+          size: radius * 0.004,
           vertexColors: true,
-          sizeAttenuation: true,   // farther points draw smaller
+          sizeAttenuation: true,
+          transparent: true,        // so we can dim it when something is highlighted
+          opacity: 1.0,
         });
 
-        const cloud = new THREE.Points(geometry, material);
+        const cloud = new THREE.Points(geometry, backdropMaterial);
         scene.add(cloud);
 
         // frame the camera on the cloud, and orbit around its center
@@ -81,6 +113,73 @@
       undefined,
       (err) => console.error("Failed to load scene.ply:", err)
     );
+
+    // ── query: text -> /query -> light up the matched object ─────────
+    const statusEl = document.getElementById("status");
+    const inputEl = document.getElementById("q");
+
+    function clearHighlight() {
+      if (highlight) {
+        scene.remove(highlight);
+        highlight.geometry.dispose();
+        highlight.material.dispose();
+        highlight = null;
+      }
+      if (backdropMaterial) backdropMaterial.opacity = 1.0;
+    }
+
+    async function runQuery(text) {
+      text = text.trim();
+      if (!text) return;
+      statusEl.textContent = "searching…";
+
+      let data;
+      try {
+        const res = await fetch("/query", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+        data = await res.json();
+      } catch (e) {
+        statusEl.textContent = "server error — is the FastAPI server running?";
+        return;
+      }
+
+      const match = data.results && data.results[0];
+      if (!match) { statusEl.textContent = "no match"; return; }
+
+      clearHighlight();
+      backdropMaterial.opacity = 0.25;   // ghost the room so the match pops
+
+      // build a bright point cloud from the matched object's points.
+      // (Y-flip to match the backdrop's flip above.)
+      const pts = match.points;
+      const positions = new Float32Array(pts.length * 3);
+      for (let i = 0; i < pts.length; i++) {
+        positions[3 * i]     = pts[i][0];
+        positions[3 * i + 1] = -pts[i][1];
+        positions[3 * i + 2] = pts[i][2];
+      }
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      const mat = new THREE.PointsMaterial({
+        color: 0xffe14d,                 // bright yellow
+        size: sceneRadius * 0.012,       // ~3x the backdrop dots
+        sizeAttenuation: true,
+      });
+      highlight = new THREE.Points(geom, mat);
+      scene.add(highlight);
+
+      statusEl.textContent =
+        `match: object #${match.mask_id} · score ${match.score.toFixed(3)} · ${pts.length} points`;
+    }
+
+    document.getElementById("go").addEventListener("click", () => runQuery(inputEl.value));
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") runQuery(inputEl.value);
+      if (e.key === "Escape") { inputEl.value = ""; clearHighlight(); statusEl.textContent = ""; }
+    });
 
     // ── keep the canvas matched to the window ────────────────────────
     window.addEventListener("resize", () => {

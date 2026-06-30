@@ -3,10 +3,13 @@ from .embedding import SigLIPEmbedder
 from fastapi import FastAPI
 from pydantic import BaseModel
 from .query import query_scene
+from fastapi.staticfiles import StaticFiles
+
 
 bundle = load_scene("scene.pkl")
 embedder = SigLIPEmbedder()
 app = FastAPI()
+
 
 
 class Query(BaseModel):       # describes the JSON body: {"text": "..."}
@@ -31,3 +34,4 @@ def query(q: Query):          # FastAPI parses the body into `q`
         )
     return result_dict
 
+app.mount("/", StaticFiles(directory="viewer", html=True), name="viewer")
