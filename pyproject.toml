@@ -8,6 +8,9 @@ authors = [{ name = "Muhammad Awais Bin Adil" }]
 license = { text = "Apache-2.0" }
 dependencies = ["opencv-python", "transformers", "fastapi"]
 
+[project.scripts]
+lumen3d = "lumen3d.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

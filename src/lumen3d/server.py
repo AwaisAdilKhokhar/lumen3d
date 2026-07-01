@@ -1,16 +1,25 @@
+from pathlib import Path
+
 from .cache import load_scene
 from .embedding import SigLIPEmbedder
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from .query import query_scene
 from fastapi.staticfiles import StaticFiles
+
+# The viewer front end (index.html + its assets) lives at the repo root, not
+# inside the package. Resolve it from THIS file so the server works regardless
+# of the current working directory: server.py is <repo>/src/lumen3d/server.py,
+# so parents[2] is the repo root.
+VIEWER_DIR = Path(__file__).resolve().parents[2] / "viewer"
 
 
 class Query(BaseModel):       # describes the JSON body: {"text": "..."}
     text: str
 
 
-def build_app(bundle, embedder) -> FastAPI:
+def build_app(bundle, embedder, scene_ply=None) -> FastAPI:
     """Build the query server around an ALREADY-LOADED scene bundle + embedder.
 
     Dependencies are *injected* (not constructed in here) for two payoffs:
@@ -19,8 +28,23 @@ def build_app(bundle, embedder) -> FastAPI:
          text-only embedder, so the host never imports DA3/SAM2 (FR-10).
     The routes are defined INSIDE the factory, so they close over THIS call's
     `bundle` and `embedder` — each app carries its own ingredients.
+
+    If `scene_ply` is given, the viewer's `scene.ply` request is served from
+    that path (an arbitrary scene folder) instead of `viewer/scene.ply`. This
+    is what `lumen3d view <folder>` needs: point the point cloud at the folder
+    the user named, without copying files into `viewer/`. Left `None`, the
+    static mount serves `viewer/scene.ply` as before (the demo-server default).
     """
     app = FastAPI()
+
+    if scene_ply is not None:
+        scene_ply = Path(scene_ply)
+
+        # Registered BEFORE the "/" static mount, so it wins for this one path
+        # (Starlette matches routes in order; the mount would otherwise catch it).
+        @app.get("/scene.ply")
+        def scene_point_cloud():
+            return FileResponse(scene_ply)
 
     @app.get("/health")                   # "when someone GETs /health, run this"
     def health():
@@ -42,8 +66,8 @@ def build_app(bundle, embedder) -> FastAPI:
     # Mount the viewer LAST, after the API routes, so "/" doesn't shadow them.
     # check_dir=False keeps build_app callable from any working directory
     # (e.g. under pytest, where the cwd may not be the project root).
-    app.mount("/", StaticFiles(directory="viewer", html=True, check_dir=False),
-              name="viewer")
+    app.mount("/", StaticFiles(directory=str(VIEWER_DIR), html=True,
+                               check_dir=False), name="viewer")
     return app
 
 

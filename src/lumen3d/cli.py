@@ -50,10 +50,44 @@ def main():
         help="Confidence threshold passed to fusion's unprojection (default: 0.0).",
     )
 
+    # the "query" window: a built scene folder + text -> ranked matches printed
+    q = subparsers.add_parser(
+        "query",
+        help="Search a built scene by text and print the ranked matches.",
+    )
+    q.add_argument("scene", help="Path to a scene folder (containing bundle.pkl).")
+    q.add_argument("text", help='The text query, e.g. "the red backpack".')
+    q.add_argument(
+        "-k", "--top-k", type=int, default=5,
+        help="How many matches to print, best first (default: 5).",
+    )
+
+    # the "view" window: launch the web viewer + query server on a scene folder
+    view = subparsers.add_parser(
+        "view",
+        help="Launch the web viewer and query server on a scene folder.",
+    )
+    view.add_argument(
+        "scene",
+        help="Path to a scene folder (containing bundle.pkl and scene.ply).",
+    )
+    view.add_argument(
+        "--host", default="127.0.0.1",
+        help="Host interface to bind (default: 127.0.0.1).",
+    )
+    view.add_argument(
+        "--port", type=int, default=8000,
+        help="Port to serve on (default: 8000).",
+    )
+
     args = parser.parse_args()
 
     if args.command == "reconstruct":
         run_reconstruct(args)
+    elif args.command == "query":
+        run_query(args)
+    elif args.command == "view":
+        run_view(args)
     else:
         # No command (or an unknown one) -> show help instead of doing nothing.
         parser.print_help()
@@ -102,6 +136,65 @@ def run_reconstruct(args):
     n_objects = len(bundle["geometry"])
     n_points = len(bundle["scene"][0])
     print(f"done. scene -> {out_dir}/  ({n_objects} objects, {n_points} points)")
+
+
+def run_query(args):
+    """Load `args.scene/bundle.pkl`, run one text query, print ranked matches.
+
+    Unlike `reconstruct`, this touches no DA3/SAM2 — only SigLIP's *text* tower
+    (to turn the phrase into a vector) and pure-NumPy cosine. So the heavy
+    backbone imports stay out of this branch. (It still needs torch for SigLIP,
+    so today it runs in .venv-da3; a torch-light query path is future FR-10 work.)
+    """
+    from .cache import load_scene
+    from .embedding import SigLIPEmbedder
+    from .query import query_scene
+
+    bundle_path = Path(args.scene) / "bundle.pkl"
+    if not bundle_path.exists():
+        raise SystemExit(
+            f"No bundle.pkl in {args.scene!r} — run `lumen3d reconstruct` first."
+        )
+
+    bundle = load_scene(bundle_path)
+    results = query_scene(args.text, bundle, SigLIPEmbedder(), top_k=args.top_k)
+
+    if not results:
+        print("This scene has no objects to match.")
+        return
+
+    print(f'Top {len(results)} match(es) for {args.text!r}:')
+    for rank, (mask_id, score, points, colors) in enumerate(results, start=1):
+        print(f"  {rank}. object {mask_id:>3}   score {score:.4f}   ({len(points)} points)")
+
+
+def run_view(args):
+    """Serve the web viewer + query API for the scene folder `args.scene`.
+
+    Loads the folder's bundle.pkl, wires it into the FastAPI app (with the
+    folder's scene.ply as the point cloud the browser draws), and runs uvicorn.
+    Runs in .venv-da3 (needs SigLIP's text tower for /query, and uvicorn).
+    """
+    from .cache import load_scene
+    from .embedding import SigLIPEmbedder
+    from .server import build_app
+    import uvicorn
+
+    scene_dir = Path(args.scene)
+    bundle_path = scene_dir / "bundle.pkl"
+    ply_path = scene_dir / "scene.ply"
+    if not bundle_path.exists():
+        raise SystemExit(
+            f"No bundle.pkl in {args.scene!r} — run `lumen3d reconstruct` first."
+        )
+    if not ply_path.exists():
+        raise SystemExit(f"No scene.ply in {args.scene!r} — the viewer needs it.")
+
+    bundle = load_scene(bundle_path)
+    app = build_app(bundle, SigLIPEmbedder(), scene_ply=ply_path)
+
+    print(f"serving {scene_dir}/ at http://{args.host}:{args.port}/  (Ctrl-C to stop)")
+    uvicorn.run(app, host=args.host, port=args.port)
 
 
 if __name__ == "__main__":
