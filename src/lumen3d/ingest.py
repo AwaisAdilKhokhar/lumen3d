@@ -1,4 +1,4 @@
-"""Ingest stage: turn raw input (an image folder or a video) into frames."""
+"""Ingest stage: turn raw input (a single image, an image folder, or a video) into frames."""
 
 from pathlib import Path
 import cv2
@@ -129,18 +129,21 @@ def downscale_frames(frames: list[Path], max_width: int = 1024, output_dir: str 
 
 
 def load_frames(input_path: str, output_dir: str ='frames', stride: int = 10) -> list[Path]:
-    """Takes in input path and routes to either find_images() or extract_video_frames()
+    """Route an input path to the right handler and return a list of frames.
+
+    Three kinds of input are accepted:
+        - a folder of images -> find_images()
+        - a video file       -> extract_video_frames()
+        - a single image file -> returned as a one-element list (no extraction)
 
     Args:
-        input_path: Path to a directory that contains image files or video.
-        output_dir: Path to the folder you want to create that will contain frames of the video
-        stride: stride determines how many frames we skip from the video and how many you keep. if stride in 10 every 10th frame will be saved to be used and the rest will be discarded
+        input_path: Path to an image folder, a video file, or a single image.
+        output_dir: Folder for extracted video frames (unused for images).
+        stride: For a video, keep every Nth frame. Ignored for images.
 
     Returns:
-        A list of Path objects (one per image or frame), sorted by name so the frames
-        are always in a consistent, predictable order.
-
-    
+        A list of Path objects (one per image or frame), sorted by name so the
+        frames are always in a consistent, predictable order.
     """
 
     path_object = Path(input_path)
@@ -148,11 +151,23 @@ def load_frames(input_path: str, output_dir: str ='frames', stride: int = 10) ->
         return find_images(input_path)
 
     elif path_object.is_file():
-        if path_object.suffix.lower() in VIDEO_EXTENSIONS:
-            return extract_video_frames(input_path,output_dir,stride)
+        suffix = path_object.suffix.lower()
+        if suffix in VIDEO_EXTENSIONS:
+            return extract_video_frames(input_path, output_dir, stride)
+
+        elif suffix in IMAGE_EXTENSIONS:
+            # A single image is already a usable frame — no extraction or copy
+            # needed. Everything downstream (DA3, SAM2, fusion, embedding) loops
+            # over N frames and works fine for N == 1, so we just hand it back as
+            # a one-element list. Note: one viewpoint means a monocular / 2.5D
+            # reconstruction — depth for the surfaces facing the camera only.
+            return [path_object]
 
         else:
-            raise ValueError("Only video files or image folders are accepted")
+            raise ValueError(
+                f"Unsupported file type: {path_object.suffix!r}. Accepted input: "
+                "a single image, a folder of images, or a video file."
+            )
 
     else:
         raise ValueError(f"Unsupported input: {input_path!r}. Please give  an image folder or a video file.")

@@ -25,9 +25,13 @@ def main():
     # the "reconstruct" window: input frames -> a scene folder on disk
     recon = subparsers.add_parser(
         "reconstruct",
-        help="Build a queryable scene from a video or image folder.",
+        help="Build a queryable scene from a video, an image folder, or a single image.",
     )
-    recon.add_argument("input", help="Path to a video file or a folder of images.")
+    recon.add_argument(
+        "input",
+        help="Path to a video file, a folder of images, or a single image. "
+             "(A single image gives a monocular / 2.5D reconstruction.)",
+    )
     recon.add_argument(
         "-o", "--output", default="scene",
         help="Folder to write the scene into (default: 'scene').",

@@ -2,14 +2,38 @@
 
 import cv2
 import numpy as np
+import pytest
 
-from lumen3d.ingest import downscale_frames
+from lumen3d.ingest import downscale_frames, load_frames
 
 
 def _write_image(path, width, height):
     """Write a solid gray image of the given size to `path`."""
     image = np.full((height, width, 3), 128, dtype=np.uint8)
     cv2.imwrite(str(path), image)
+
+
+def test_load_frames_accepts_a_single_image_file(tmp_path):
+    # Arrange: one image file (not a folder, not a video).
+    photo = tmp_path / "room.jpg"
+    _write_image(photo, width=640, height=480)
+
+    # Act
+    result = load_frames(str(photo))
+
+    # Assert: it comes back as a one-element list holding that exact path —
+    # no extraction, no copy. Downstream treats it as a single frame.
+    assert result == [photo]
+
+
+def test_load_frames_rejects_an_unsupported_file(tmp_path):
+    # Arrange: a file that is neither an image nor a video.
+    junk = tmp_path / "notes.txt"
+    junk.write_text("not a frame")
+
+    # Act / Assert: no silent None — a clear error instead.
+    with pytest.raises(ValueError):
+        load_frames(str(junk))
 
 
 def test_downscale_shrinks_wide_frames_preserving_aspect(tmp_path):
