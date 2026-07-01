@@ -15,7 +15,7 @@ installed just to run.
 import argparse
 from pathlib import Path
 
-from .ingest import load_frames
+from .ingest import load_frames, downscale_frames
 
 
 def main():
@@ -31,6 +31,23 @@ def main():
     recon.add_argument(
         "-o", "--output", default="scene",
         help="Folder to write the scene into (default: 'scene').",
+    )
+    recon.add_argument(
+        "--stride", type=int, default=10,
+        help="For a video: keep every Nth frame (default: 10). Ignored for folders.",
+    )
+    recon.add_argument(
+        "--max-width", type=int, default=1024,
+        help="Downscale frames to at most this width before building, to fit GPU "
+             "memory (default: 1024). Use 0 to disable downscaling.",
+    )
+    recon.add_argument(
+        "--model", default="depth-anything/DA3-LARGE",
+        help="DA3 backbone weights (default: depth-anything/DA3-LARGE).",
+    )
+    recon.add_argument(
+        "--conf", type=float, default=0.0,
+        help="Confidence threshold passed to fusion's unprojection (default: 0.0).",
     )
 
     args = parser.parse_args()
@@ -64,15 +81,18 @@ def run_reconstruct(args):
     ply_path = out_dir / "scene.ply"
 
     print(f"[1/3] loading frames from {args.input!r} ...")
-    frames = load_frames(args.input)
-    print(f"      {len(frames)} frames.")
+    frames = load_frames(args.input, stride=args.stride)
+    if args.max_width and args.max_width > 0:
+        frames = downscale_frames(frames, max_width=args.max_width)
+    print(f"      {len(frames)} frames (max width {args.max_width}px).")
 
     print("[2/3] building scene (DA3 -> SAM2 -> fusion -> SigLIP) ...")
     bundle = build_scene(
         frames,
-        DA3Backbone(),
+        DA3Backbone(args.model),
         SAM2Segmenter(),
         SigLIPEmbedder(),
+        conf_thr=args.conf,
         save_path=bundle_path,
     )
 

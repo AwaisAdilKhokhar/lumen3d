@@ -77,7 +77,46 @@ def extract_video_frames(video_path: str, output_dir: str, stride: int = 10) -> 
     return sorted(saved)
 
 
-    
+def downscale_frames(frames: list[Path], max_width: int = 1024, output_dir: str = "frames_small") -> list[Path]:
+    """Resize frames so none is wider than `max_width`, preserving aspect ratio.
+
+    Heavy models (SAM2 especially) run out of GPU memory on full-resolution
+    frames — a 4K frame OOMs an 8GB card. Shrinking the longest side to ~1024px
+    before the build is mandatory on modest hardware. Frames already at or below
+    `max_width` are copied through unchanged.
+
+    Args:
+        frames: List of frame image paths (from `load_frames`).
+        max_width: Maximum output width in pixels. Height scales to match.
+        output_dir: Folder to write the resized frames into (created if needed).
+
+    Returns:
+        A sorted list of Path objects, one per resized frame in `output_dir`.
+    """
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+
+    saved = []
+    for frame_path in frames:
+        image = cv2.imread(str(frame_path))
+        if image is None:
+            raise ValueError(f"Could not read frame: {frame_path!r}")
+
+        height, width = image.shape[:2]        # cv2 is (H, W, C) — height first
+        if width > max_width:
+            scale = max_width / width
+            # cv2.resize wants (width, height); INTER_AREA is best for shrinking.
+            new_size = (max_width, round(height * scale))
+            image = cv2.resize(image, new_size, interpolation=cv2.INTER_AREA)
+
+        out_path = out / frame_path.name
+        cv2.imwrite(str(out_path), image)
+        saved.append(out_path)
+
+    return sorted(saved)
+
+
+
 
 
 
