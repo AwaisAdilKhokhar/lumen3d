@@ -15,12 +15,15 @@ from lumen3d.server import build_app
 class _FakeEmbedder:
     """Stand-in for SigLIPEmbedder: embed_text returns a fixed, chosen vector
     (ignores the query string), so the test controls which object ranks first.
-    No model is ever loaded."""
+    No model is ever loaded. Records every query it's asked for in `calls`, so a
+    test can assert the startup warm-up fired."""
 
     def __init__(self, vector):
         self._vector = vector
+        self.calls = []
 
     def embed_text(self, query):
+        self.calls.append(query)
         return self._vector
 
 
@@ -84,3 +87,20 @@ def test_query_missing_text_field_is_422():
     client = _client()
     resp = client.post("/query", json={})
     assert resp.status_code == 422
+
+
+def test_embedder_is_warmed_up_on_startup():
+    # The lifespan warm-up only fires when the app's startup runs, which the
+    # TestClient triggers only when used as a context manager (`with`). This is
+    # exactly why the other tests here — built without `with` — never warm the
+    # embedder and stay green.
+    embedder = _FakeEmbedder(np.array([1.0, 0.0], dtype=np.float32))
+    app = build_app(_fake_bundle(), embedder)
+
+    assert embedder.calls == []                # not warmed just by building
+
+    with TestClient(app) as client:            # entering fires startup
+        assert embedder.calls == ["warmup"]    # warmed once, before any request
+        resp = client.post("/query", json={"text": "anything"})
+        assert resp.status_code == 200         # and normal queries still work
+    assert embedder.calls == ["warmup", "anything"]

@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from .cache import load_scene
@@ -35,7 +36,25 @@ def build_app(bundle, embedder, scene_ply=None) -> FastAPI:
     the user named, without copying files into `viewer/`. Left `None`, the
     static mount serves `viewer/scene.ply` as before (the demo-server default).
     """
-    app = FastAPI()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        # Warm the embedder ONCE, at startup, on the main thread — before the
+        # server accepts any request. This kills two problems at once:
+        #   1. cold-start latency: otherwise the FIRST /query pays the full
+        #      SigLIP load (and possibly a weights download);
+        #   2. the lazy-import race: /query runs in a worker thread, so loading
+        #      the model there for the first time can flake (the transient
+        #      "cannot import name 'AutoImageProcessor'"). Loading here, on the
+        #      main thread before serving, removes the race.
+        # We warm through the PUBLIC query path (embed_text) so we load exactly
+        # what serving uses; the returned vector is discarded. No try/except:
+        # if the model can't load, we WANT the server to refuse to start rather
+        # than boot and 500 on every query.
+        embedder.embed_text("warmup")
+        yield
+
+    app = FastAPI(lifespan=lifespan)
 
     if scene_ply is not None:
         scene_ply = Path(scene_ply)
