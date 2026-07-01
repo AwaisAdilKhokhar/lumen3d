@@ -15,4 +15,8 @@ def export_ply(path, points, colors) -> None:
         for point, color in zip(points, colors):
             x, y, z = point        # three floats
             r, g, b = color        # three uint8 values
-            f.write(f"{x} {y} {z} {int(r)} {int(g)} {int(b)}\n")
+            # Fixed 4-decimal coords: kills float32 repr noise
+            # (2.2999999... -> 2.3000) and shrinks the file. 4 decimals is
+            # 0.1 mm at meter scale -- far finer than the 504x280 depth
+            # ceiling, so no real detail is lost. Colors are ints: no noise.
+            f.write(f"{x:.4f} {y:.4f} {z:.4f} {int(r)} {int(g)} {int(b)}\n")
