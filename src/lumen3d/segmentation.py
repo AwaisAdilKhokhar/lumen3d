@@ -3,19 +3,26 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-import shutil
-import tempfile
 import cv2
 import numpy as np
 
 
 @dataclass
 class ObjectMask:
-    """A mask of a single object which would include the mask array (boolean) and the object id
+    """A single object outline on a single frame: a boolean mask plus an id.
 
     Attributes:
-        mask_id: int  — the id of a particular object which remains consistent across frames
-        mask: bool array of shape (H, W) — Each mask isolates a single specific object
+        mask_id: int — which object this mask belongs to.
+            ⚠️ The MEANING depends on the stage:
+              - Straight out of `Segmenter.segment`, ids are per-DETECTION and
+                carry NO cross-frame identity (the finder runs on each frame
+                independently, so the same real object gets a different id in
+                each frame it appears in).
+              - After `association.associate_masks_3d`, ids are per-INSTANCE and
+                DO stay consistent across frames (same id == same object in 3D).
+            Fusion and embedding both group by `mask_id`, so they must be fed the
+            associated (instance-labeled) masks, not the raw detections.
+        mask: bool array of shape (H, W) — True where this object is.
     """
     mask_id: int
     mask: np.ndarray
@@ -33,58 +40,46 @@ class Segmenter(ABC):
 
 
 class SAM2Segmenter(Segmenter):
-    """SAM2 segmenter (Meta). Loads weights lazily on first segment() call."""
+    """SAM2 segmenter (Meta). Loads weights lazily on first segment() call.
+
+    Discovery-per-frame: the automatic mask generator ("Finder") runs on EVERY
+    frame, so objects that only appear later in the clip get found too. It does
+    NOT establish cross-frame identity — that is `association.associate_masks_3d`'s
+    job, done in 3D. (The old design ran the Finder on frame 0 only and had the
+    SAM2 video Tracker propagate those masks forward, which meant anything absent
+    from frame 0 was invisible to the whole pipeline.)
+    """
 
     def __init__(self, weights="facebook/sam2-hiera-large", device=None):
-        self.weights = weights   
-        self.device = device     
-        self._tracker = None
+        self.weights = weights
+        self.device = device
         self._finder = None
 
     def _load_model(self):
-        if self._tracker is None or self._finder is None:            # not loaded yet?
-            from sam2.sam2_video_predictor import SAM2VideoPredictor
+        if self._finder is None:            # not loaded yet?
             from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator  # ← lazy import, here not at top
             import torch
             device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
             self.device = device
-            self._tracker = SAM2VideoPredictor.from_pretrained(self.weights)
-            self._finder  = SAM2AutomaticMaskGenerator.from_pretrained(self.weights)
-        return self._tracker,self._finder
-
-    
+            self._finder = SAM2AutomaticMaskGenerator.from_pretrained(self.weights)
+        return self._finder
 
     def segment(self, frames: list[Path]) -> list[ list[ObjectMask] ]:
+        finder = self._load_model()
 
-        tracker, finder = self._load_model()
+        results = []          # the list[list[ObjectMask]] we'll return
+        next_id = 0           # a running id so every raw detection is distinct
+        for frame_path in frames:
+            bgr = cv2.imread(str(frame_path))
+            rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+            masks = finder.generate(rgb)          # DISCOVER: outline every object on THIS frame
 
-        # --- DISCOVER: Finder outlines every object on frame 0 ---
-        bgr = cv2.imread(str(frames[0]))
-        rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-        masks = finder.generate(rgb)
-
-        # --- HANDOFF (setup): give the whole video to the Tracker ---
-        # The Tracker's init_state demands EITHER an .mp4 OR a folder of JPEGs named as
-        # bare zero-padded integers (00000.jpg, 00001.jpg, ...), because internally it
-        # sorts with int(filename). Our frames are named frame_00000.jpg, which would
-        # crash that int(). So we ADAPT: copy each frame into a temp folder under the
-        # name SAM2 expects, then hand that folder over.
-        with tempfile.TemporaryDirectory() as tmpdir:
-            for i, frame_path in enumerate(frames):
-                shutil.copy(frame_path, Path(tmpdir) / f"{i:05d}.jpg")
-            state = tracker.init_state(tmpdir)
-            for i, m in enumerate(masks):
-                tracker.add_new_mask(state, frame_idx=0, obj_id=i, mask=m["segmentation"])
-
-            results = []                                    # the list[list[ObjectMask]] we'll return
-            for frame_idx, obj_ids, video_res_masks in tracker.propagate_in_video(state):
-                frame_masks = []                            # the objects in THIS one frame
-                for j, obj_id in enumerate(obj_ids):
-                    bool_mask = (video_res_masks[j, 0] > 0.0).cpu().numpy()
-                    frame_masks.append(ObjectMask(mask_id=int(obj_id), mask=bool_mask))
-                results.append(frame_masks)
-            return results
-
-            
-
-        
+            frame_masks = []
+            for m in masks:
+                # Ids are per-detection here (no cross-frame meaning yet) — see
+                # ObjectMask.mask_id. associate_masks_3d assigns the real,
+                # frame-stable instance ids afterwards.
+                frame_masks.append(ObjectMask(mask_id=next_id, mask=m["segmentation"]))
+                next_id += 1
+            results.append(frame_masks)
+        return results

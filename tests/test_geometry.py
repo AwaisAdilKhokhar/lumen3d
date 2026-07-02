@@ -6,6 +6,7 @@ from lumen3d.geometry import (
     pixel_to_camera_point,
     camera_point_to_world,
     unproject_frame,
+    unproject_frame_vectorized,
     unproject,
     resize_mask,
 )
@@ -166,3 +167,49 @@ def test_unproject_loops_frames_and_flips_the_note():
     # the contract requires float32 points / uint8 colors
     assert pts.dtype == np.float32
     assert cols.dtype == np.uint8
+
+
+# --- unproject_frame_vectorized (must equal the loop version) --------------
+
+def test_vectorized_unproject_matches_the_loop():
+    # A frame with a mix of good, invalid-depth, and low-confidence pixels and a
+    # non-trivial pose. The fast NumPy path must return the exact same points and
+    # colors, in the same order, as the hand-written loop.
+    rng = np.random.default_rng(0)
+    depth = np.array([[2.0, 3.0, -1.0],
+                      [1.5, 4.0,  2.5],
+                      [0.0, 5.0,  1.0]])
+    K = np.array([[1.2, 0.0, 1.0],
+                  [0.0, 1.1, 0.5],
+                  [0.0, 0.0, 1.0]])
+    c2w = np.array([[1, 0, 0, 2.0],
+                    [0, 1, 0, -1.0],
+                    [0, 0, 1, 0.5],
+                    [0, 0, 0, 1.0]], dtype=float)
+    image = rng.integers(0, 256, size=(3, 3, 3), dtype=np.uint8)
+    conf = np.array([[1.0, 0.2, 1.0],
+                     [1.0, 1.0, 0.9],
+                     [1.0, 0.1, 1.0]])
+
+    loop_pts, loop_cols = unproject_frame(depth, K, c2w, image, conf, conf_thr=0.5)
+    vec_pts, vec_cols = unproject_frame_vectorized(depth, K, c2w, image, conf, conf_thr=0.5)
+
+    assert np.allclose(np.array(loop_pts, dtype=np.float32), vec_pts)
+    assert np.array_equal(np.array(loop_cols, dtype=np.uint8), vec_cols)
+
+
+def test_vectorized_unproject_honors_the_mask():
+    depth = np.full((2, 2), 2.0)
+    mask = np.array([[False, False],
+                     [True,  False]], dtype=bool)
+    K = np.eye(3)
+    c2w = np.eye(4)
+    image = np.array([[[10, 10, 10], [20, 20, 20]],
+                      [[30, 30, 30], [40, 40, 40]]], dtype=np.uint8)
+    conf = np.ones((2, 2))
+
+    pts, cols = unproject_frame_vectorized(depth, K, c2w, image, conf, conf_thr=0.5, mask=mask)
+
+    assert pts.shape == (1, 3)
+    assert np.allclose(pts, [[0, 2, 2]])
+    assert np.array_equal(cols, [[30, 30, 30]])

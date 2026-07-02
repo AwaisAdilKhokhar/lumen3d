@@ -124,7 +124,7 @@ def run_reconstruct(args):
         frames = downscale_frames(frames, max_width=args.max_width)
     print(f"      {len(frames)} frames (max width {args.max_width}px).")
 
-    print("[2/3] building scene (DA3 -> SAM2 -> fusion -> SigLIP) ...")
+    print("[2/3] building scene (DA3 -> SAM2 -> 3D association -> SigLIP) ...")
     bundle = build_scene(
         frames,
         DA3Backbone(args.model),

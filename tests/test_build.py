@@ -1,11 +1,17 @@
 """Tests for build_scene (the produce-side front door).
 
-build_scene owns no model math — it just runs the four machines in order and
-packs their outputs into a bundle. So we fake the three GPU machines (backbone,
-segmenter, embedder) with stand-ins that return canned data, and let the one
-cheap pure-NumPy machine, fuse_masks_to_3d, run for real. The tests then check
-the *wiring*: right pieces in the right compartments, the low-res images get
-handed to the embedder, and save_path round-trips through cache.load_scene.
+build_scene owns no model math — it just runs the machines in order and packs
+their outputs into a bundle. So we fake the three GPU machines (backbone,
+segmenter, embedder) with stand-ins that return canned data, and let the cheap
+pure-NumPy machine, associate_masks_3d, run for real. The tests then check the
+*wiring*: right pieces in the right compartments, geometry and embeddings keyed
+by the SAME instance ids, the low-res images handed to the embedder, and
+save_path round-tripping through cache.load_scene.
+
+Note on ids: the fake segmenter returns detections tagged 7 and 12, but those
+are raw per-detection ids. build_scene runs the real 3D association, which
+relabels them to instance ids (0, 1 here) — so the assertions below are written
+against the instance ids, not the segmenter's raw ones.
 """
 
 import numpy as np
@@ -50,8 +56,10 @@ def _mask(true_at):
 
 
 def _fake_masks():
-    """Object 7 in both frames, object 12 only in frame 0 (same shape as the
-    fusion test, so we know exactly what real fuse_masks_to_3d will return)."""
+    """One object at pixel column 0's bottom, seen in both frames (its 3D points
+    overlap -> the associator merges it into a single instance), plus a second
+    object at (0,0) seen only in frame 0. The raw ids (7, 12) are meaningless;
+    association reassigns instance ids 0 and 1."""
     return [
         [ObjectMask(mask_id=7,  mask=_mask([(1, 0)])),
          ObjectMask(mask_id=12, mask=_mask([(0, 0)]))],
@@ -101,15 +109,18 @@ def test_build_scene_assembles_the_bundle():
     recon = _fake_recon()
     masks = _fake_masks()
     canned_embeddings = {
-        7:  np.array([1.0, 0.0], dtype=np.float32),
-        12: np.array([0.0, 1.0], dtype=np.float32),
+        0: np.array([1.0, 0.0], dtype=np.float32),
+        1: np.array([0.0, 1.0], dtype=np.float32),
     }
     backbone = _FakeBackbone(recon)
     segmenter = _FakeSegmenter(masks)
     embedder = _FakeEmbedder(canned_embeddings)
 
-    # Act
-    bundle = build_scene(["a.jpg", "b.jpg"], backbone, segmenter, embedder, conf_thr=0.5)
+    # Act (min_points=1: the fake masks are only a pixel or two)
+    bundle = build_scene(
+        ["a.jpg", "b.jpg"], backbone, segmenter, embedder,
+        conf_thr=0.5, min_points=1,
+    )
 
     # Assert: the box has exactly the three compartments.
     assert set(bundle.keys()) == {"embeddings", "geometry", "scene"}
@@ -117,12 +128,18 @@ def test_build_scene_assembles_the_bundle():
     # embeddings compartment is what the embedder produced, untouched.
     assert bundle["embeddings"] is canned_embeddings
 
-    # geometry compartment is the REAL fuse output: object 7 piled across both
-    # frames (3 points), object 12 seen once (1 point).
+    # geometry compartment is the REAL association output: the merged object
+    # (instance 0) piled across both frames (3 points), the frame-0-only object
+    # (instance 1) seen once (1 point).
     geometry = bundle["geometry"]
-    assert set(geometry.keys()) == {7, 12}
-    assert geometry[7][0].shape == (3, 3)
-    assert geometry[12][0].shape == (1, 3)
+    assert set(geometry.keys()) == {0, 1}
+    assert geometry[0][0].shape == (3, 3)
+    assert geometry[1][0].shape == (1, 3)
+
+    # geometry and embeddings must be keyed by the SAME instance ids, and those
+    # are exactly the ids the embedder was handed on the relabeled masks.
+    seen_ids = {obj.mask_id for frame in embedder.masks_seen for obj in frame}
+    assert seen_ids == set(geometry.keys())
 
     # scene compartment is the reconstruction's full cloud.
     scene_points, scene_colors = bundle["scene"]
@@ -142,6 +159,7 @@ def test_build_scene_embeds_the_reconstruction_images():
         _FakeBackbone(recon),
         _FakeSegmenter(_fake_masks()),
         embedder,
+        min_points=1,
     )
 
     assert embedder.images_seen is recon.images

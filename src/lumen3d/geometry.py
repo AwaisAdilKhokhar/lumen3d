@@ -71,6 +71,53 @@ def unproject_frame(depth, K, c2w, image, conf, conf_thr,mask=None):
             colors.append(image[v, u])
     return points, colors
 
+def frame_world_points(depth, K, c2w):
+    # Vectorized twin of the pixel->camera->world math in unproject_frame, for
+    # ALL pixels of one frame at once. Returns an (H, W, 3) array of world XYZ
+    # (world_points[v, u] is where pixel (u, v) lands). No filtering here — pair
+    # it with valid_pixels() to drop bad/low-confidence pixels.
+    #
+    # Why this exists: the per-pixel Python loop in unproject_frame is fine for a
+    # handful of tracked masks, but 3D association re-unprojects every mask on
+    # every frame, so the loop becomes the bottleneck. NumPy does the same math
+    # in one shot (test_geometry proves they agree point-for-point).
+    H, W = depth.shape
+    fx = K[0, 0]
+    fy = K[1, 1]
+    cx = K[0, 2]
+    cy = K[1, 2]
+
+    us, vs = np.meshgrid(np.arange(W), np.arange(H))   # both (H, W): us[v,u]=u, vs[v,u]=v
+    X = (us - cx) / fx * depth
+    Y = (vs - cy) / fy * depth
+    Z = depth
+    cam = np.stack([X, Y, Z, np.ones_like(depth, dtype=float)], axis=-1)   # (H, W, 4)
+
+    # (c2w @ p) for every point p == cam_rows @ c2w.T
+    world = cam @ c2w.T          # (H, W, 4)
+    return world[..., :3]
+
+
+def valid_pixels(depth, conf, conf_thr):
+    # The same keep/skip test unproject_frame applies per pixel, vectorized to a
+    # single (H, W) bool mask: finite positive depth AND confidence at/above the
+    # bar. (unproject_frame skips conf < conf_thr, so we keep conf >= conf_thr.)
+    return np.isfinite(depth) & (depth > 0) & (conf >= conf_thr)
+
+
+def unproject_frame_vectorized(depth, K, c2w, image, conf, conf_thr, mask=None):
+    # Vectorized equivalent of unproject_frame: returns (points (M,3) float32,
+    # colors (M,3) uint8) for the surviving pixels, in the same C-order (row by
+    # row) the Python loop produces — so the two are point-for-point equal.
+    world = frame_world_points(depth, K, c2w)
+    keep = valid_pixels(depth, conf, conf_thr)
+    if mask is not None:
+        keep = keep & mask
+    points = world[keep].astype(np.float32)
+    colors = image[keep].astype(np.uint8)
+    return points, colors
+
+
 def to_homogeneous(ext):
     # ext: (3,4) or (4,4) -> always return (4,4)
     # if already 4x4, return as-is
