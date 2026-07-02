@@ -16,8 +16,9 @@ def build_scene(
     segmenter,
     embedder,
     conf_thr=0.0,
-    voxel_frac=0.02,
+    voxel_frac=0.01,
     iou_thr=0.25,
+    sim_thr=0.85,
     min_points=25,
     save_path=None,
 ) -> dict:
@@ -33,9 +34,10 @@ def build_scene(
         segmenter: A `Segmenter` (e.g. `SAM2Segmenter`) — gives per-frame masks.
         embedder: An `Embedder` (e.g. `SigLIPEmbedder`) — gives meaning vectors.
         conf_thr: Confidence threshold passed down to unprojection.
-        voxel_frac, iou_thr, min_points: 3D-association knobs — see
+        voxel_frac, iou_thr, sim_thr, min_points: 3D-association knobs — see
             `association.associate_masks_3d` (voxel size as a fraction of scene
-            diagonal, merge threshold, and the minimum points to keep a detection).
+            diagonal, geometric + semantic merge thresholds, and the minimum
+            points to keep a detection).
         save_path: If given, also pickle the bundle to this path via
             `save_scene`. If None, nothing is written to disk.
 
@@ -48,13 +50,18 @@ def build_scene(
     recon = backbone.reconstruct(frames)          # DA3  -> Reconstruction
     masks = segmenter.segment(frames)             # SAM2 -> per-frame detections
 
-    # Group detections into 3D instances: relabels masks with frame-stable
-    # instance ids AND fuses each instance's points across frames in one pass.
-    masks, geometry = associate_masks_3d(
-        recon, masks, conf_thr=conf_thr,
-        voxel_frac=voxel_frac, iou_thr=iou_thr, min_points=min_points,
+    # One embedding per detection: segment() gives every detection a unique id,
+    # so embed_regions (which groups by id) returns exactly one vector each.
+    # Association needs these up front to gate merges on meaning, not just space.
+    det_embeddings = embedder.embed_regions(recon.images, masks)
+
+    # Group detections into 3D instances by geometry AND meaning: relabels masks
+    # with frame-stable instance ids, fuses each instance's points, and averages
+    # its member embeddings — all keyed the same way, in one pass.
+    masks, geometry, embeddings = associate_masks_3d(
+        recon, masks, det_embeddings, conf_thr=conf_thr,
+        voxel_frac=voxel_frac, iou_thr=iou_thr, sim_thr=sim_thr, min_points=min_points,
     )
-    embeddings = embedder.embed_regions(recon.images, masks)  # crops -> meaning vectors
     scene = (recon.points, recon.colors)          # the whole room, as a backdrop
 
     bundle = {

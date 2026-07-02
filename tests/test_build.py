@@ -8,10 +8,10 @@ pure-NumPy machine, associate_masks_3d, run for real. The tests then check the
 by the SAME instance ids, the low-res images handed to the embedder, and
 save_path round-tripping through cache.load_scene.
 
-Note on ids: the fake segmenter returns detections tagged 7 and 12, but those
-are raw per-detection ids. build_scene runs the real 3D association, which
-relabels them to instance ids (0, 1 here) — so the assertions below are written
-against the instance ids, not the segmenter's raw ones.
+Note on ids: the fake segmenter returns detections with unique raw ids (7, 8,
+12). build_scene embeds each detection, then runs the real 3D association, which
+relabels everything to instance ids (0, 1 here) — so the assertions below are
+written against the instance ids, not the segmenter's raw ones.
 """
 
 import numpy as np
@@ -57,14 +57,25 @@ def _mask(true_at):
 
 def _fake_masks():
     """One object at pixel column 0's bottom, seen in both frames (its 3D points
-    overlap -> the associator merges it into a single instance), plus a second
-    object at (0,0) seen only in frame 0. The raw ids (7, 12) are meaningless;
-    association reassigns instance ids 0 and 1."""
+    overlap -> the associator can merge it into a single instance), plus a second
+    object at (0,0) seen only in frame 0. Every detection has a UNIQUE raw id
+    (7, 12, 8) like real segment() output; association reassigns instance ids."""
     return [
         [ObjectMask(mask_id=7,  mask=_mask([(1, 0)])),
          ObjectMask(mask_id=12, mask=_mask([(0, 0)]))],
-        [ObjectMask(mask_id=7,  mask=_mask([(1, 0), (1, 1)]))],
+        [ObjectMask(mask_id=8,  mask=_mask([(1, 0), (1, 1)]))],
     ]
+
+
+def _det_embeddings():
+    """One embedding per detection, keyed by raw id. The two overlapping
+    detections (7, 8) share a vector so they merge; 12 differs (and is spatially
+    separate anyway)."""
+    return {
+        7:  np.array([1.0, 0.0], dtype=np.float32),
+        8:  np.array([1.0, 0.0], dtype=np.float32),
+        12: np.array([0.0, 1.0], dtype=np.float32),
+    }
 
 
 class _FakeBackbone:
@@ -108,13 +119,9 @@ def test_build_scene_assembles_the_bundle():
     # Arrange
     recon = _fake_recon()
     masks = _fake_masks()
-    canned_embeddings = {
-        0: np.array([1.0, 0.0], dtype=np.float32),
-        1: np.array([0.0, 1.0], dtype=np.float32),
-    }
     backbone = _FakeBackbone(recon)
     segmenter = _FakeSegmenter(masks)
-    embedder = _FakeEmbedder(canned_embeddings)
+    embedder = _FakeEmbedder(_det_embeddings())
 
     # Act (min_points=1: the fake masks are only a pixel or two)
     bundle = build_scene(
@@ -125,9 +132,6 @@ def test_build_scene_assembles_the_bundle():
     # Assert: the box has exactly the three compartments.
     assert set(bundle.keys()) == {"embeddings", "geometry", "scene"}
 
-    # embeddings compartment is what the embedder produced, untouched.
-    assert bundle["embeddings"] is canned_embeddings
-
     # geometry compartment is the REAL association output: the merged object
     # (instance 0) piled across both frames (3 points), the frame-0-only object
     # (instance 1) seen once (1 point).
@@ -136,10 +140,12 @@ def test_build_scene_assembles_the_bundle():
     assert geometry[0][0].shape == (3, 3)
     assert geometry[1][0].shape == (1, 3)
 
-    # geometry and embeddings must be keyed by the SAME instance ids, and those
-    # are exactly the ids the embedder was handed on the relabeled masks.
-    seen_ids = {obj.mask_id for frame in embedder.masks_seen for obj in frame}
-    assert seen_ids == set(geometry.keys())
+    # embeddings come out of association (mean of member detections) and MUST be
+    # keyed by the same instance ids as geometry.
+    embeddings = bundle["embeddings"]
+    assert set(embeddings.keys()) == set(geometry.keys())
+    assert np.allclose(embeddings[0], [1.0, 0.0])   # mean of the two merged dets
+    assert np.allclose(embeddings[1], [0.0, 1.0])
 
     # scene compartment is the reconstruction's full cloud.
     scene_points, scene_colors = bundle["scene"]
@@ -152,7 +158,7 @@ def test_build_scene_embeds_the_reconstruction_images():
     # not the original frames. Prove build_scene actually hands recon.images to
     # the embedder.
     recon = _fake_recon()
-    embedder = _FakeEmbedder({7: np.zeros(2, dtype=np.float32)})
+    embedder = _FakeEmbedder(_det_embeddings())
 
     build_scene(
         ["a.jpg", "b.jpg"],
@@ -168,21 +174,21 @@ def test_build_scene_embeds_the_reconstruction_images():
 def test_build_scene_saves_when_path_given(tmp_path):
     # With save_path set, the same bundle must be readable back off disk.
     recon = _fake_recon()
-    canned_embeddings = {7: np.array([1.0, 0.0], dtype=np.float32)}
     out = tmp_path / "scene.pkl"
 
     bundle = build_scene(
         ["a.jpg", "b.jpg"],
         _FakeBackbone(recon),
         _FakeSegmenter(_fake_masks()),
-        _FakeEmbedder(canned_embeddings),
+        _FakeEmbedder(_det_embeddings()),
+        min_points=1,
         save_path=out,
     )
 
     assert out.exists()
     loaded = load_scene(out)
     assert set(loaded.keys()) == {"embeddings", "geometry", "scene"}
-    assert np.array_equal(loaded["embeddings"][7], bundle["embeddings"][7])
+    assert np.array_equal(loaded["embeddings"][0], bundle["embeddings"][0])
     assert np.array_equal(loaded["scene"][0], bundle["scene"][0])
 
 
