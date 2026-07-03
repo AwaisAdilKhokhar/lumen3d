@@ -43,6 +43,11 @@ node_modules/
 # --- Local test assets (machine-specific; gitignored) ---
 video.mp4
 frames_out/
+frames/
+frames_small/
 image.png
 test_frames/
 test_video.mp4
+
+# --- Throwaway GPU-verification scripts (dev only; superseded by tests/) ---
+_check_*.py
