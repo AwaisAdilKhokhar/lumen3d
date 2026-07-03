@@ -2,11 +2,28 @@
 
 > Turn a phone video into a language-queryable 3D scene.
 
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Hugging_Face_Space-yellow)](https://huggingface.co/spaces/AwaisAdilKhokhar/lumen3d)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AwaisAdilKhokhar/lumen3d/blob/main/notebooks/lumen3d_colab.ipynb)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 Lumen3D takes a casual video walkthrough (or a set of photos) and produces an
 interactive, language-queryable 3D scene. Type a phrase — *"the red backpack"*,
 *"a wooden chair"* — and the matching object lights up in 3D in your browser.
 
 **Status:** 🚧 Early development (v0.1). Built in public as a learning + portfolio project.
+
+---
+
+## 🔦 Live demo
+
+**[Try it in your browser →](https://huggingface.co/spaces/AwaisAdilKhokhar/lumen3d)** — no
+install, no GPU, no build step. Explore a real reconstructed room and search it by typing a phrase.
+
+<!-- TEASER GIF (TODO): record ~5 s of typing a query and the object lighting up in the
+     viewer, save as docs/teaser.gif, and embed here:  ![Lumen3D demo](docs/teaser.gif) -->
+
+> Runs on a free CPU Space: it sleeps after inactivity (first load may take ~30 s to wake),
+> and the showcase scene is a large point cloud, so give it a moment to render.
 
 ---
 
@@ -113,8 +130,9 @@ enough to run all three commands.
   whole thing runnable on a free Colab T4.
 - **Build is offline; query is light.** Building a scene is GPU-bound and slow;
   answering a query needs only the precomputed per-object embeddings + SigLIP's
-  small *text* encoder + cosine. So the plan is to pre-build demo scenes and host
-  only the light query path — a zero-install, no-GPU live demo (roadmap below).
+  small *text* encoder + cosine. So the demo pre-builds a scene offline and hosts
+  only the light query path — a
+  [zero-install, no-GPU live demo](https://huggingface.co/spaces/AwaisAdilKhokhar/lumen3d).
 - **Swappable backbone.** The reconstruction stage sits behind a `Backbone`
   interface, so DA3 can be replaced without touching the rest of the pipeline.
 
@@ -128,8 +146,8 @@ enough to run all three commands.
 - [x] Text query → cosine similarity → 3D highlight
 - [x] Web viewer (three.js) with a live search box
 - [x] `lumen3d` CLI — `reconstruct` / `query` / `view`
-- [ ] Colab notebook (build a scene on a free T4)
-- [ ] Hosted, zero-install live demo (pre-built scenes, query-only server)
+- [x] Colab notebook (build a scene on a free T4)
+- [x] Hosted, zero-install live demo (pre-built scene, query-only server)
 - [ ] Benchmarks (LERF, Replica) + backbone comparison
 
 ---

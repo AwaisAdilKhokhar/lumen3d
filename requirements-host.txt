@@ -1,0 +1,15 @@
+# Light, GPU-free serving deps for the hosted demo (FR-10).
+# NOTE: torch (CPU) is installed separately in the Dockerfile from PyTorch's CPU
+# wheel index — pinning it here would pull the CUDA build from PyPI.
+#
+# Deliberately absent: depth-anything-3, sam2 (the heavy build stack). The query
+# path never imports them — proven by tests/test_server.py::test_query_host_is_da3_sam2_free.
+
+fastapi
+uvicorn[standard]
+transformers==5.12.1     # the version proven end-to-end in .venv-da3
+sentencepiece            # SigLIP's text tokenizer (AutoTokenizer) needs it
+protobuf                 # ditto — the sentencepiece tokenizer loads a protobuf model
+pillow                   # AutoImageProcessor (loaded alongside the text tower) pulls PIL
+opencv-python-headless   # cv2 is imported at load; headless = no system GL libs on slim
+numpy>=2.0               # match Colab's numpy 2.x so the pickled bundle unpickles cleanly

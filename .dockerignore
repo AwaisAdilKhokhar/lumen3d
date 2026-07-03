@@ -1,0 +1,22 @@
+# Keep the build context lean. NOTE: demo/ (the frozen scene) and its *.pkl /
+# *.ply are NOT ignored — they must go into the image.
+.git/
+.venv/
+.venv-da3/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.egg-info/
+node_modules/
+
+# Big local-only assets (not the frozen demo)
+*.zip
+*.log
+*.mp4
+frames_out/
+test_frames/
+image.png
+
+# Tests / dev-only
+tests/
+notebooks/
