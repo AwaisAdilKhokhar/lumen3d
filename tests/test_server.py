@@ -6,10 +6,15 @@ drive the app through FastAPI's TestClient (a real, in-process HTTP round trip),
 so these tests exercise the JSON boundary too (NumPy -> native types).
 """
 
+import subprocess
+import sys
+import textwrap
+
 import numpy as np
 from fastapi.testclient import TestClient
 
-from lumen3d.server import build_app
+from lumen3d.cache import save_scene
+from lumen3d.server import build_app, create_demo_app
 
 
 class _FakeEmbedder:
@@ -104,3 +109,55 @@ def test_embedder_is_warmed_up_on_startup():
         resp = client.post("/query", json={"text": "anything"})
         assert resp.status_code == 200         # and normal queries still work
     assert embedder.calls == ["warmup", "anything"]
+
+
+def test_create_demo_app_serves_the_frozen_scene_folder(tmp_path, monkeypatch):
+    # create_demo_app is the hosted entrypoint (FR-10): it reads LUMEN3D_SCENE,
+    # loads <dir>/bundle.pkl, and serves <dir>/scene.ply. Build a tiny frozen
+    # folder on disk and point the env var at it. No `with` on the client, so
+    # startup never fires -> the real SigLIPEmbedder it constructs is never asked
+    # to load a model (and /health, /scene.ply don't need one anyway).
+    scene_dir = tmp_path / "frozen"
+    scene_dir.mkdir()
+    b = _fake_bundle()
+    save_scene(scene_dir / "bundle.pkl", b["embeddings"], b["geometry"], b["scene"])
+    # write_bytes, not write_text: on Windows write_text translates \n -> \r\n,
+    # but FileResponse serves the raw bytes, so compare bytes to bytes.
+    (scene_dir / "scene.ply").write_bytes(b"ply\nstand-in point cloud\n")
+
+    monkeypatch.setenv("LUMEN3D_SCENE", str(scene_dir))
+    client = TestClient(create_demo_app())
+
+    assert client.get("/health").json() == {"status": "ok", "objects": 2}
+    resp = client.get("/scene.ply")            # served from the frozen folder
+    assert resp.status_code == 200
+    assert resp.content == b"ply\nstand-in point cloud\n"
+
+
+def test_query_host_is_da3_sam2_free():
+    # FR-10's core premise: the hosted query path must NEVER import DA3 or SAM2
+    # (their multi-GB weights + torch-CUDA build are exactly what makes building
+    # a GPU job and serving a light one). Prove it in a FRESH interpreter, so
+    # another test's imports can't pollute sys.modules: import the server, build
+    # an app around a fake bundle, then assert no depth_anything_3 / sam2 module
+    # got pulled in. This is most meaningful under .venv-da3, where both ARE
+    # installed -> it proves "available" doesn't mean "imported".
+    probe = textwrap.dedent("""
+        import sys
+        import numpy as np
+        from lumen3d.server import build_app
+
+        class _Fake:
+            def embed_text(self, query):
+                return np.zeros(2, dtype="float32")
+
+        build_app({"embeddings": {}, "geometry": {}, "scene": None}, _Fake())
+        leaked = sorted(m for m in sys.modules
+                        if m.split(".")[0] in {"depth_anything_3", "sam2"})
+        assert not leaked, f"heavy build stack leaked into the query host: {leaked}"
+        print("CLEAN")
+    """)
+    result = subprocess.run([sys.executable, "-c", probe],
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert "CLEAN" in result.stdout

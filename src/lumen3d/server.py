@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -98,3 +99,28 @@ def create_default_app() -> FastAPI:
         uvicorn lumen3d.server:create_default_app --factory --port 8000
     """
     return build_app(load_scene("scene.pkl"), SigLIPEmbedder())
+
+
+def create_demo_app() -> FastAPI:
+    """Query-only entrypoint for the hosted, GPU-free demo (FR-10).
+
+    Points at a FROZEN scene FOLDER — `<dir>/bundle.pkl` (the per-instance
+    embedding table + geometry a query needs) and `<dir>/scene.ply` (the
+    backdrop the viewer renders). It loads only the LIGHT "consume" stack: the
+    pickled bundle + SigLIP's text tower. Importing this module or building this
+    app touches NEITHER DA3 NOR SAM2 — that heavy "produce" stack is why building
+    is an offline CLI/Colab job; serving a pre-built scene is not. (Proven, not
+    assumed: see test_query_host_is_da3_sam2_free.)
+
+    Differs from create_default_app in two ways that matter for the frozen demo:
+    it reads a scene *folder* (not the legacy cwd-relative `scene.pkl`), and it
+    serves that folder's `scene.ply` so the viewer renders the demo's own cloud.
+
+    The folder comes from the LUMEN3D_SCENE env var (default "demo"), so the
+    Docker/Space host can point it wherever the frozen scene was copied without a
+    code change. Run with:
+        uvicorn lumen3d.server:create_demo_app --factory --host 0.0.0.0 --port 7860
+    """
+    scene_dir = Path(os.environ.get("LUMEN3D_SCENE", "demo"))
+    bundle = load_scene(scene_dir / "bundle.pkl")
+    return build_app(bundle, SigLIPEmbedder(), scene_ply=scene_dir / "scene.ply")

@@ -21,6 +21,8 @@ scenes/
 *.glb
 *.pkl
 scene.pkl
+*.zip
+*.log
 _build_full/
 _build_small/
 
