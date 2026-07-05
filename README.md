@@ -32,11 +32,11 @@ it on a CPU.
 
 <div align="center">
 
-<video src="https://github.com/AwaisAdilKhokhar/lumen3d/raw/main/docs/demo.mp4" controls muted loop width="720"></video>
+<video src="https://github.com/AwaisAdilKhokhar/lumen3d/raw/main/assets/demo.mp4" controls muted loop width="720"></video>
 
 <sub><i>Typing a phrase lights up the matching object in 3D — no per-scene training, running on a CPU.</i></sub>
 
-<sub>▶️ <a href="https://github.com/AwaisAdilKhokhar/lumen3d/raw/main/docs/demo.mp4">Watch the demo video</a> · 🔦 <a href="https://huggingface.co/spaces/AwaisAdilKhokhar/lumen3d">Try it live</a></sub>
+<sub>▶️ <a href="https://github.com/AwaisAdilKhokhar/lumen3d/raw/main/assets/demo.mp4">Watch the demo video</a> · 🔦 <a href="https://huggingface.co/spaces/AwaisAdilKhokhar/lumen3d">Try it live</a></sub>
 
 </div>
 
