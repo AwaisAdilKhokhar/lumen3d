@@ -51,3 +51,8 @@ test_video.mp4
 
 # --- Throwaway GPU-verification scripts (dev only; superseded by tests/) ---
 _check_*.py
+
+# Internal docs stay private, but the README demo video is a public asset.
+docs/*
+!docs/demo.mp4
+scripts/

@@ -30,8 +30,15 @@ for geometry, [SAM 2](https://github.com/facebookresearch/sam2) for object masks
 semantics — into one pipeline that builds a scene on a **free Colab T4** and queries
 it on a CPU.
 
-<!-- TEASER GIF (TODO): record ~5 s of typing a query and the object lighting up in the
-     viewer, save as docs/teaser.gif, and embed here:  ![Lumen3D demo](docs/teaser.gif) -->
+<div align="center">
+
+<video src="https://github.com/AwaisAdilKhokhar/lumen3d/raw/main/docs/demo.mp4" controls muted loop width="720"></video>
+
+<sub><i>Typing a phrase lights up the matching object in 3D — no per-scene training, running on a CPU.</i></sub>
+
+<sub>▶️ <a href="https://github.com/AwaisAdilKhokhar/lumen3d/raw/main/docs/demo.mp4">Watch the demo video</a> · 🔦 <a href="https://huggingface.co/spaces/AwaisAdilKhokhar/lumen3d">Try it live</a></sub>
+
+</div>
 
 > 🚧 **Status:** v0.1 in active development, built in public. Core pipeline, CLI,
 > web viewer, Colab notebook, and hosted demo are done; benchmarks are in progress.
