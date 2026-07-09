@@ -4,6 +4,7 @@
 
 ### Turn a phone video into a language-queryable 3D scene
 
+[![PyPI](https://img.shields.io/pypi/v/lumen3d)](https://pypi.org/project/lumen3d/)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Hugging%20Face%20Space-yellow)](https://huggingface.co/spaces/AwaisAdilKhokhar/lumen3d)
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AwaisAdilKhokhar/lumen3d/blob/main/notebooks/lumen3d_colab.ipynb)
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
@@ -230,7 +231,13 @@ highlights in 3D.
 
 ## Installation
 
-Lumen3D is not on PyPI yet — install from source:
+```bash
+pip install lumen3d
+```
+
+That gives you the `lumen3d` command, ready to `view` and `query` scenes
+(the base install includes CPU-capable `torch` and the web viewer). Or install
+from source:
 
 ```bash
 git clone https://github.com/AwaisAdilKhokhar/lumen3d.git
@@ -238,10 +245,8 @@ cd lumen3d
 pip install -e .
 ```
 
-That gives you the `lumen3d` command. On top of the base install:
-
-- `reconstruct` needs the heavy stack — `torch` (CUDA), `depth-anything-3`, `sam2`.
-- `query` and `view` need only `torch` (CPU is fine) and `uvicorn`.
+On top of the base install, `reconstruct` (building scenes) needs the heavy
+stack — `torch` (CUDA), `depth-anything-3`, `sam2`.
 
 > **Python version note:** Depth Anything 3 pins Python ≤ 3.13, so use a
 > Python 3.12 environment for the full pipeline. On a GPU host, one 3.12
