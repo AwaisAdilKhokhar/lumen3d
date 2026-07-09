@@ -10,11 +10,11 @@ from pydantic import BaseModel
 from .query import query_scene
 from fastapi.staticfiles import StaticFiles
 
-# The viewer front end (index.html + its assets) lives at the repo root, not
-# inside the package. Resolve it from THIS file so the server works regardless
-# of the current working directory: server.py is <repo>/src/lumen3d/server.py,
-# so parents[2] is the repo root.
-VIEWER_DIR = Path(__file__).resolve().parents[2] / "viewer"
+# The viewer front end (index.html + its assets) ships INSIDE the package, so
+# it exists wherever lumen3d is imported from — the repo checkout during
+# development AND site-packages after `pip install lumen3d`. Resolving it as a
+# sibling of THIS file works in both, unlike a repo-root-relative path.
+VIEWER_DIR = Path(__file__).resolve().parent / "viewer"
 
 
 class Query(BaseModel):       # describes the JSON body: {"text": "..."}

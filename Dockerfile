@@ -48,11 +48,10 @@ ENV HF_HUB_OFFLINE=1 \
     TRANSFORMERS_OFFLINE=1
 
 # 4. App code (via PYTHONPATH — no pip install: the package's opencv-python dep
-#    is the GUI build, and building it needs README.md; both avoided here), the
-#    viewer front end, and the frozen scene. server.py's VIEWER_DIR resolves to
-#    parents[2] of /app/src/lumen3d/server.py == /app, so /app/viewer is found.
+#    is the GUI build, and building it needs README.md; both avoided here) and
+#    the frozen scene. The viewer front end ships inside the package
+#    (src/lumen3d/viewer/), so COPY src/ brings it along.
 COPY src/ ./src/
-COPY viewer/ ./viewer/
 COPY demo/ ./demo/
 
 # HF Spaces convention: serve on 7860, bound to 0.0.0.0.

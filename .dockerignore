@@ -9,7 +9,9 @@ __pycache__/
 *.egg-info/
 node_modules/
 
-# Big local-only assets (not the frozen demo)
+# Big local-only assets (not the frozen demo). The repo-root viewer/ holds only
+# a stale local scene.ply now — the real viewer ships in src/lumen3d/viewer/.
+viewer/
 *.zip
 *.log
 *.mp4

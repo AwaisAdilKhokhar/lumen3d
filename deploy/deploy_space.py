@@ -46,17 +46,12 @@ def main() -> None:
         api.upload_file(path_or_fileobj=str(REPO_ROOT / name),
                         path_in_repo=name, repo_id=repo_id, repo_type="space")
 
-    # Package source (imported via PYTHONPATH in the image).
+    # Package source (imported via PYTHONPATH in the image). Includes the viewer
+    # front end, which lives inside the package (src/lumen3d/viewer/).
     print("uploading src/ ...")
     api.upload_folder(folder_path=str(REPO_ROOT / "src"), path_in_repo="src",
-                      repo_id=repo_id, repo_type="space")
-
-    # Viewer front end — skip the stale local scene.ply (the Space serves the
-    # frozen demo's cloud via the /scene.ply route, so this one is dead weight).
-    print("uploading viewer/ (excluding scene.ply) ...")
-    api.upload_folder(folder_path=str(REPO_ROOT / "viewer"), path_in_repo="viewer",
                       repo_id=repo_id, repo_type="space",
-                      ignore_patterns=["scene.ply"])
+                      ignore_patterns=["__pycache__"])
 
     # The frozen scene (~390 MB) — bundle.pkl + scene.ply. Handled as LFS server-side.
     print("uploading demo/ (~390 MB, this is the slow part) ...")
