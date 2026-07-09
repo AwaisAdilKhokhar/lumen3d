@@ -9,7 +9,11 @@ license = { text = "Apache-2.0" }
 dependencies = [
     "numpy",
     "opencv-python",
+    "pillow",
+    "protobuf",
+    "sentencepiece",
     "torch",
+    "torchvision",
     "transformers",
     "fastapi",
     "uvicorn",
