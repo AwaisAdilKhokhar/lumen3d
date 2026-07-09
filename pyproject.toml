@@ -1,12 +1,23 @@
 [project]
 name = "lumen3d"
-version = "0.0.1"
+version = "0.1.0"
 description = "Turn a phone video into a language-queryable 3D scene."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Muhammad Awais Bin Adil" }]
 license = { text = "Apache-2.0" }
-dependencies = ["opencv-python", "transformers", "fastapi"]
+dependencies = [
+    "numpy",
+    "opencv-python",
+    "torch",
+    "transformers",
+    "fastapi",
+    "uvicorn",
+]
+
+[project.urls]
+Homepage = "https://github.com/AwaisAdilKhokhar/lumen3d"
+"Live Demo" = "https://huggingface.co/spaces/AwaisAdilKhokhar/lumen3d"
 
 [project.scripts]
 lumen3d = "lumen3d.cli:main"
